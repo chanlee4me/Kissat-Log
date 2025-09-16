@@ -120,7 +120,8 @@ void kissat_update_learned (kissat *solver, unsigned glue, unsigned size) {
   INC (clauses_learned);
   LOG ("learned[%" PRIu64 "] clause glue %u size %u", GET (clauses_learned),
        glue, size);
-  LBD_LOG (solver, glue, size); // Add LBD_LOG instrumentation
+  LOG ("[LBD] conflict=%" PRIu64 " learned=%" PRIu64 " glue=%u size=%u",
+      solver->statistics.conflicts, GET (clauses_learned), glue, size);
   if (solver->stable)
     kissat_tick_reluctant (&solver->reluctant);
   ADD (literals_learned, size);

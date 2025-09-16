@@ -162,8 +162,8 @@ void kissat_backtrack_after_conflict (kissat *solver, unsigned new_level) {
   uint64_t total_conflicts = CONFLICTS;
   unsigned from_level = solver->level;
   
-  LOG ("BACKTRACK_LOG: conflict_backtrack from level %u to level %u, timestamp %.3f, conflicts %" PRIu64, 
-       from_level, new_level, current_time, total_conflicts);
+  LOG ("[BACKTRACK] type=conflict from=%u to=%u time=%.3f conflicts=%" PRIu64,
+    from_level, new_level, current_time, total_conflicts);
   // -------end of conflict backtrack logging------
   
   if (solver->level)
