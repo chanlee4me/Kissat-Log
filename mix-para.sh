@@ -17,8 +17,12 @@ TOTAL_FILES=400
 # 获取系统的CPU核心数
 NUM_CORES=$(nproc)
 
-# 确保输出目录存在
+# 确保输出目录与子目录存在
 mkdir -p "$OUTPUT_DIR"
+SOLVER_LOG_DIR="$OUTPUT_DIR/solver_logs"
+BACKTRACK_LOG_DIR="$OUTPUT_DIR/backtrack_logs"
+LBD_DIR="$OUTPUT_DIR/lbd_csv"
+mkdir -p "$SOLVER_LOG_DIR" "$BACKTRACK_LOG_DIR" "$LBD_DIR"
 
 # 定义处理单个文件的函数，接收循环次数和文件路径作为参数
 process_file() {
@@ -30,8 +34,8 @@ process_file() {
     # 获取文件名（不含路径）
     filename=$(basename "$str")
     
-    # 创建唯一的输出文件，包含进程ID以避免并行冲突
-    output_file="$OUTPUT_DIR/kissat_output_${loop_num}_${filename}_$$.log"
+    # 创建唯一的求解器输出文件，包含进程ID以避免并行冲突
+    output_file="$SOLVER_LOG_DIR/kissat_output_${loop_num}_${filename}_$$.log"
     
     # 在输出文件开头记录CNF文件路径和开始时间
     echo "========================================" > "$output_file"
@@ -47,9 +51,9 @@ process_file() {
     timeout -s SIGTERM 3600 "$KISSAT_PATH" --log=1 "$str" > "$temp_output" 2>&1
     exit_code=$?
 
-        # 解析 LBD_LOG 行写入当前实例专属 CSV
-        # 输出文件：$OUTPUT_DIR/lbd_<原文件名>.csv
-        lbd_csv="$OUTPUT_DIR/lbd_${filename}.csv"
+    # 解析 LBD_LOG 行写入当前实例专属 CSV
+    # 输出文件：$LBD_DIR/lbd_<原文件名>.csv
+    lbd_csv="$LBD_DIR/lbd_${filename}.csv"
         if [ ! -f "$lbd_csv" ]; then
                 echo "instance,loop,conflict,learned_index,lbd,size" > "$lbd_csv"
         fi
@@ -84,7 +88,7 @@ process_file() {
     ' "$temp_output" >> "$output_file"
     
     # 单独提取并保存BACKTRACK_LOG信息到专门的日志文件
-    backtrack_log_file="$OUTPUT_DIR/backtrack_logs_${loop_num}_${filename}_$$.log"
+    backtrack_log_file="$BACKTRACK_LOG_DIR/backtrack_logs_${loop_num}_${filename}_$$.log"
     echo "========================================" > "$backtrack_log_file"
     echo "CNF文件: $str" >> "$backtrack_log_file"
     echo "开始时间: $(date)" >> "$backtrack_log_file"
@@ -183,17 +187,19 @@ SUMMARY_FILE="$OUTPUT_DIR/processing_summary_$(date +%Y%m%d_%H%M%S).txt"
 echo "处理汇总报告" > "$SUMMARY_FILE"
 echo "生成时间: $(date)" >> "$SUMMARY_FILE"
 echo "========================================" >> "$SUMMARY_FILE"
-echo "处理的CNF文件总数: $(find "$OUTPUT_DIR" -name "kissat_output_*.log" | wc -l)" >> "$SUMMARY_FILE"
-echo "输出日志目录: $OUTPUT_DIR" >> "$SUMMARY_FILE"
+echo "处理的CNF文件总数: $(find "$SOLVER_LOG_DIR" -name "kissat_output_*.log" | wc -l)" >> "$SUMMARY_FILE"
+echo "求解器输出目录: $SOLVER_LOG_DIR" >> "$SUMMARY_FILE"
+echo "回溯日志目录: $BACKTRACK_LOG_DIR" >> "$SUMMARY_FILE"
+echo "LBD CSV 目录: $LBD_DIR" >> "$SUMMARY_FILE"
 echo "========================================" >> "$SUMMARY_FILE"
 
 # 统计结果类型
 echo "" >> "$SUMMARY_FILE"
 echo "结果统计:" >> "$SUMMARY_FILE"
-timeout_count=$(grep -l "状态: TIMEOUT" "$OUTPUT_DIR"/kissat_output_*.log 2>/dev/null | wc -l)
-satisfiable_count=$(grep -l "s SATISFIABLE" "$OUTPUT_DIR"/kissat_output_*.log 2>/dev/null | wc -l)
-unsatisfiable_count=$(grep -l "s UNSATISFIABLE" "$OUTPUT_DIR"/kissat_output_*.log 2>/dev/null | wc -l)
-unknown_count=$(grep -l "s UNKNOWN" "$OUTPUT_DIR"/kissat_output_*.log 2>/dev/null | wc -l)
+timeout_count=$(grep -l "状态: TIMEOUT" "$SOLVER_LOG_DIR"/kissat_output_*.log 2>/dev/null | wc -l)
+satisfiable_count=$(grep -l "s SATISFIABLE" "$SOLVER_LOG_DIR"/kissat_output_*.log 2>/dev/null | wc -l)
+unsatisfiable_count=$(grep -l "s UNSATISFIABLE" "$SOLVER_LOG_DIR"/kissat_output_*.log 2>/dev/null | wc -l)
+unknown_count=$(grep -l "s UNKNOWN" "$SOLVER_LOG_DIR"/kissat_output_*.log 2>/dev/null | wc -l)
 
 echo "TIMEOUT: $timeout_count" >> "$SUMMARY_FILE"
 echo "SATISFIABLE: $satisfiable_count" >> "$SUMMARY_FILE"
@@ -203,12 +209,12 @@ echo "UNKNOWN: $unknown_count" >> "$SUMMARY_FILE"
 # 统计回溯日志信息
 echo "" >> "$SUMMARY_FILE"
 echo "回溯日志统计:" >> "$SUMMARY_FILE"
-backtrack_log_files=$(find "$OUTPUT_DIR" -name "backtrack_logs_*.log" 2>/dev/null | wc -l)
+backtrack_log_files=$(find "$BACKTRACK_LOG_DIR" -name "backtrack_logs_*.log" 2>/dev/null | wc -l)
 echo "回溯日志文件数: $backtrack_log_files" >> "$SUMMARY_FILE"
 
 if [ "$backtrack_log_files" -gt 0 ]; then
-    total_conflict_backtracks=$(grep -h "冲突回溯次数:" "$OUTPUT_DIR"/backtrack_logs_*.log 2>/dev/null | awk '{sum += $2} END {print sum+0}')
-    total_normal_backtracks=$(grep -h "普通回溯次数:" "$OUTPUT_DIR"/backtrack_logs_*.log 2>/dev/null | awk '{sum += $2} END {print sum+0}')
+    total_conflict_backtracks=$(grep -h "冲突回溯次数:" "$BACKTRACK_LOG_DIR"/backtrack_logs_*.log 2>/dev/null | awk '{sum += $2} END {print sum+0}')
+    total_normal_backtracks=$(grep -h "普通回溯次数:" "$BACKTRACK_LOG_DIR"/backtrack_logs_*.log 2>/dev/null | awk '{sum += $2} END {print sum+0}')
     total_decision_backtracks=$((total_conflict_backtracks + total_normal_backtracks))
     
     echo "总冲突回溯次数: $total_conflict_backtracks" >> "$SUMMARY_FILE"
