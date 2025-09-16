@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # 记录 kissat-4.0.1求解器完整输出的脚本
-# 当前不采用混合策略：只使用普通VSIDS
+# 当前仍然采用原始混合策略：在普通 VSIDS 和其他策略间切换
 # 功能：记录回溯日志（冲突回溯和普通回溯）和求解结果统计
 # 设置循环次数
 LOOP_COUNT=1  # 可以根据需要调整循环次数
 
 # 需要修改的路径
 CNF_DIR="/mnt/chenli/SAT/2021cnf"
-OUTPUT_DIR="/mnt/chenli/SAT/ori-kissat-4.0.1/no_mix_output_logs"
+OUTPUT_DIR="/mnt/chenli/SAT/ori-kissat-4.0.1/ori_mix_output_logs"
 KISSAT_PATH="/mnt/chenli/SAT/ori-kissat-4.0.1/build/kissat"
 
 # 每次循环处理的CNF文件个数
@@ -42,16 +42,31 @@ process_file() {
     # 创建临时文件存储完整输出
     temp_output=$(mktemp)
     
-        # 使用timeout命令限制程序执行时间为3600秒，并记录完整输出到临时文件
-        # VSIDS-only 参数组：--stable=2 关闭模式切换，仅使用 VSIDS 堆；--randec=0 关闭随机；--randecstable=0 再确保稳定期无随机
-        # 允许通过环境变量或脚本顶部变量关闭该模式（设置 VSIDS_ONLY=0）
-        extra_params=""
-        if [ "${VSIDS_ONLY:-1}" = "1" ]; then
-            extra_params="--stable=2 --randec=0 --randecstable=0"
-        fi
-        # 可选：用户可添加 KISSAT_EXTRA 参数继续追加其他调优（如 --restart=0 做实验）
-        timeout -s SIGTERM 3600 "$KISSAT_PATH" --log=1 $extra_params ${KISSAT_EXTRA:-} "$str" > "$temp_output" 2>&1
+    # 使用timeout命令限制程序执行时间为3600秒，并记录完整输出到临时文件
+    # 添加--log=1参数以启用回溯日志记录
+    timeout -s SIGTERM 3600 "$KISSAT_PATH" --log=1 "$str" > "$temp_output" 2>&1
     exit_code=$?
+
+        # 解析 LBD_LOG 行写入当前实例专属 CSV
+        # 输出文件：$OUTPUT_DIR/lbd_<原文件名>.csv
+        lbd_csv="$OUTPUT_DIR/lbd_${filename}.csv"
+        if [ ! -f "$lbd_csv" ]; then
+                echo "instance,loop,conflict,learned_index,lbd,size" > "$lbd_csv"
+        fi
+        awk -v inst="$filename" -v loop="$loop_num" -v of="$lbd_csv" '
+            /LBD_LOG/ {
+                conflict=""; learned=""; lbd=""; size="";
+                for (i=1;i<=NF;i++) {
+                    if ($i ~ /^conflict=/) { split($i,a,"="); conflict=a[2]; }
+                    else if ($i ~ /^learned=/) { split($i,a,"="); learned=a[2]; }
+                    else if ($i ~ /^lbd=/) { split($i,a,"="); lbd=a[2]; }
+                    else if ($i ~ /^size=/) { split($i,a,"="); size=a[2]; }
+                }
+                if (conflict!="" && learned!="" && lbd!="") {
+                    printf "%s,%s,%s,%s,%s,%s\n", inst, loop, conflict, learned, lbd, size >> of;
+                }
+            }
+        ' "$temp_output"
     
     # 过滤输出：保留求解前和求解后的信息，跳过求解过程中的详细信息
     awk '
