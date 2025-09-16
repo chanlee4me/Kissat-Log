@@ -333,6 +333,22 @@ ATTRIBUTE_FORMAT (5, 6);
       kissat_log_xor (solver, LOGPREFIX, __VA_ARGS__); \
   } while (0)
 
+
+// Added by instrumentation: unified macro to log learned clause LBD & size in parse-friendly format
+// Format: c LBD_LOG conflict=<conflicts> learned=<count> lbd=<glue> size=<size>
+// 'conflicts' counter accessed via GET(statistics.conflicts) if available; otherwise we rely on clauses_learned.
+// We keep it lightweight to avoid heavy string building cost.
+#ifndef LBD_LOG
+#define LBD_LOG(SOLVER, GLUE, SIZE) \
+  do { \
+    if ((SOLVER) && GET_OPTION (log)) { \
+      /* Using LOGPREFIX path: reuse kissat_log_msg via LOG macro style */ \
+      kissat_log_msg ((SOLVER), LOGPREFIX, "LBD_LOG conflict=%" PRIu64 " learned=%" PRIu64 " lbd=%u size=%u", \
+        (SOLVER)->statistics.conflicts, GET (clauses_learned), (unsigned)(GLUE), (unsigned)(SIZE)); \
+    } \
+  } while (0)
+#endif
+
 #else
 
 #define LOG(...) \

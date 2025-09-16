@@ -120,6 +120,7 @@ void kissat_update_learned (kissat *solver, unsigned glue, unsigned size) {
   INC (clauses_learned);
   LOG ("learned[%" PRIu64 "] clause glue %u size %u", GET (clauses_learned),
        glue, size);
+  LBD_LOG (solver, glue, size); // Add LBD_LOG instrumentation
   if (solver->stable)
     kissat_tick_reluctant (&solver->reluctant);
   ADD (literals_learned, size);
