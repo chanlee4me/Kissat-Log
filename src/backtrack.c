@@ -7,6 +7,9 @@
 #include "proprobe.h"
 #include "propsearch.h"
 #include "trail.h"
+#include "resources.h"  // added by cl for timestamp logging
+
+#include <inttypes.h>   // added by cl for PRIu64 macro
 
 static inline void unassign (kissat *solver, value *values, unsigned lit) {
   LOG ("unassign %s", LOGLIT (lit));
@@ -154,6 +157,15 @@ void kissat_backtrack_in_consistent_state (kissat *solver,
 }
 
 void kissat_backtrack_after_conflict (kissat *solver, unsigned new_level) {
+  // -------added by cl: conflict backtrack logging------
+  double current_time = kissat_wall_clock_time();
+  uint64_t total_conflicts = CONFLICTS;
+  unsigned from_level = solver->level;
+  
+  LOG ("BACKTRACK_LOG: conflict_backtrack from level %u to level %u, timestamp %.3f, conflicts %" PRIu64, 
+       from_level, new_level, current_time, total_conflicts);
+  // -------end of conflict backtrack logging------
+  
   if (solver->level)
     kissat_backtrack_without_updating_phases (solver, solver->level - 1);
   kissat_update_target_and_best_phases (solver);
